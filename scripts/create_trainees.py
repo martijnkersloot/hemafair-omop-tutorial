@@ -139,8 +139,9 @@ def main():
         psql(f"CREATE DATABASE {username} OWNER {username};", args.container, args.pg_user)
         psql(f"GRANT ALL PRIVILEGES ON DATABASE {username} TO {username};", args.container, args.pg_user)
 
-        # Create omop schema, apply DDL into it, hand ownership to the trainee
+        # Create omop + results schemas, apply DDL into omop, hand ownership to the trainee
         psql(f"CREATE SCHEMA omop AUTHORIZATION {username};", args.container, args.pg_user, db=username)
+        psql(f"CREATE SCHEMA results AUTHORIZATION {username};", args.container, args.pg_user, db=username)
         psql_file(ddl_path, args.container, args.pg_user, db=username, schema="omop")
         psql(
             f"DO $$ DECLARE r RECORD; BEGIN "
