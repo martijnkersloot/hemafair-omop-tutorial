@@ -43,9 +43,9 @@ def random_password(length: int = 16) -> str:
             return pw
 
 
-def psql(sql: str, container: str, db: str = "postgres") -> bool:
+def psql(sql: str, container: str, superuser: str, db: str = "postgres") -> bool:
     result = subprocess.run(
-        ["docker", "exec", container, "psql", "-U", "postgres", "-d", db, "-c", sql],
+        ["docker", "exec", container, "psql", "-U", superuser, "-d", db, "-c", sql],
         capture_output=True,
         text=True,
     )
@@ -56,7 +56,7 @@ def psql(sql: str, container: str, db: str = "postgres") -> bool:
     return True
 
 
-def psql_file(sql_path: str, container: str, db: str) -> bool:
+def psql_file(sql_path: str, container: str, superuser: str, db: str) -> bool:
     """Copy a SQL file into the container and execute it."""
     filename = os.path.basename(sql_path)
     dest = f"/tmp/{filename}"
@@ -68,7 +68,7 @@ def psql_file(sql_path: str, container: str, db: str) -> bool:
         print(f"  ERROR copying DDL: {cp.stderr.strip()}", file=sys.stderr)
         return False
     result = subprocess.run(
-        ["docker", "exec", container, "psql", "-U", "postgres", "-d", db, "-f", dest],
+        ["docker", "exec", container, "psql", "-U", superuser, "-d", db, "-f", dest],
         capture_output=True, text=True,
     )
     if result.returncode != 0:
@@ -89,16 +89,35 @@ def fetch_omop_ddl() -> str:
     return ddl_path
 
 
+def load_env(env_path: str) -> dict:
+    env = {}
+    if not os.path.exists(env_path):
+        return env
+    with open(env_path) as f:
+        for line in f:
+            line = line.strip()
+            if line and not line.startswith("#") and "=" in line:
+                key, _, value = line.partition("=")
+                env[key.strip()] = value.strip()
+    return env
+
+
 def main():
+    env_file = os.path.join(os.path.dirname(__file__), "..", ".env")
+    env = load_env(env_file)
+
     parser = argparse.ArgumentParser(description="Create trainee OMOP databases")
     parser.add_argument("count", type=int, help="Number of trainees to create")
     parser.add_argument("--start", type=int, default=1, help="Starting number (default: 1)")
     parser.add_argument("--container", default="hemafair_postgres", help="Postgres container name")
+    parser.add_argument("--pg-user", default=env.get("POSTGRES_USER", "postgres"), help="PostgreSQL superuser (reads from .env)")
     parser.add_argument("--out", default="credentials.csv", help="Output CSV file (default: credentials.csv)")
     args = parser.parse_args()
 
     if args.count < 1:
         sys.exit("Count must be at least 1.")
+
+    print(f"Using superuser: {args.pg_user}")
 
     ddl_path = fetch_omop_ddl()
 
@@ -108,18 +127,18 @@ def main():
         password = random_password()
         print(f"\n[{username}]")
 
-        psql(f"CREATE USER {username} WITH PASSWORD '{password}';", args.container)
-        psql(f"CREATE DATABASE {username} OWNER {username};", args.container)
-        psql(f"GRANT ALL PRIVILEGES ON DATABASE {username} TO {username};", args.container)
+        psql(f"CREATE USER {username} WITH PASSWORD '{password}';", args.container, args.pg_user)
+        psql(f"CREATE DATABASE {username} OWNER {username};", args.container, args.pg_user)
+        psql(f"GRANT ALL PRIVILEGES ON DATABASE {username} TO {username};", args.container, args.pg_user)
 
         # Apply OMOP CDM DDL as superuser, then hand ownership to the trainee
-        psql_file(ddl_path, args.container, db=username)
+        psql_file(ddl_path, args.container, args.pg_user, db=username)
         psql(
             f"DO $$ DECLARE r RECORD; BEGIN "
             f"FOR r IN SELECT tablename FROM pg_tables WHERE schemaname='public' LOOP "
             f"EXECUTE 'ALTER TABLE public.' || quote_ident(r.tablename) || ' OWNER TO {username}'; "
             f"END LOOP; END $$;",
-            args.container, db=username,
+            args.container, args.pg_user, db=username,
         )
 
         rows.append({"username": username, "password": password, "database": username})
