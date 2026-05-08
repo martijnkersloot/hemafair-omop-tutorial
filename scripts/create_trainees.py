@@ -128,7 +128,8 @@ def fetch_omop_ddl() -> str:
 
 def download_vocab() -> str:
     import gdown
-    vocab_dir = os.path.join(tempfile.gettempdir(), "omop_vocab")
+    project_root = os.path.join(os.path.dirname(__file__), "..")
+    vocab_dir = os.path.normpath(os.path.join(project_root, "vocab"))
     all_present = os.path.exists(vocab_dir) and all(
         os.path.exists(os.path.join(vocab_dir, fname)) for _, fname in VOCAB_TABLES
     )
