@@ -13,6 +13,7 @@ Usage:
 
 import argparse
 import csv
+import importlib
 import os
 import secrets
 import string
@@ -55,6 +56,11 @@ def ensure_deps():
             [sys.executable, "-m", "pip", "install", "--break-system-packages"] + needed,
             check=True,
         )
+        import site
+        importlib.reload(site)
+        for path in site.getsitepackages() + [site.getusersitepackages()]:
+            if path not in sys.path:
+                sys.path.insert(0, path)
 
 
 def random_password(length: int = 16) -> str:
