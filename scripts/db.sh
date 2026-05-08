@@ -24,7 +24,7 @@ case "$cmd" in
     docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" logs -f
     ;;
   psql)
-    docker exec -it mie_postgres psql -U "$(grep POSTGRES_USER "$ENV_FILE" | cut -d= -f2)"
+    docker exec -it hemafair_postgres psql -U "$(grep POSTGRES_USER "$ENV_FILE" | cut -d= -f2)"
     ;;
   reset)
     echo "WARNING: this destroys all data. Press Ctrl-C to abort, or Enter to continue."
