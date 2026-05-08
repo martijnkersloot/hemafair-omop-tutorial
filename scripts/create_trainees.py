@@ -57,19 +57,26 @@ def psql(sql: str, container: str, superuser: str, db: str = "postgres") -> bool
 
 
 def psql_file(sql_path: str, container: str, superuser: str, db: str, schema: str = "public") -> bool:
-    """Copy a SQL file into the container and execute it inside the given schema."""
-    filename = os.path.basename(sql_path)
-    dest = f"/tmp/{filename}"
+    """Replace @cdmDatabaseSchema placeholder, copy into container, and execute."""
+    with open(sql_path) as f:
+        ddl = f.read()
+
+    ddl = ddl.replace("@cdmDatabaseSchema", schema)
+
+    patched_path = sql_path + f".{schema}.patched.sql"
+    with open(patched_path, "w") as f:
+        f.write(ddl)
+
+    dest = f"/tmp/omop_cdm_patched.sql"
     cp = subprocess.run(
-        ["docker", "cp", sql_path, f"{container}:{dest}"],
+        ["docker", "cp", patched_path, f"{container}:{dest}"],
         capture_output=True, text=True,
     )
     if cp.returncode != 0:
         print(f"  ERROR copying DDL: {cp.stderr.strip()}", file=sys.stderr)
         return False
     result = subprocess.run(
-        ["docker", "exec", container, "psql", "-U", superuser, "-d", db,
-         "-c", f"SET search_path TO {schema};", "-f", dest],
+        ["docker", "exec", container, "psql", "-U", superuser, "-d", db, "-f", dest],
         capture_output=True, text=True,
     )
     if result.returncode != 0:
