@@ -169,6 +169,8 @@ def import_vocab(vocab_dir: str, superuser: str, password: str, db: str, port: i
         for chunk in pd.read_csv(filepath, sep="\t", low_memory=False, chunksize=50_000):
             chunk = parse_omop_dates(chunk)
             chunk.columns = [c.lower() for c in chunk.columns]
+            for col in chunk.select_dtypes(include="object").columns:
+                chunk[col] = chunk[col].fillna("")
             chunk.to_sql(table, engine, schema="omop", if_exists="append", index=False)
     print("  Vocabulary import complete.")
 
