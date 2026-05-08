@@ -56,8 +56,8 @@ def psql(sql: str, container: str, superuser: str, db: str = "postgres") -> bool
     return True
 
 
-def psql_file(sql_path: str, container: str, superuser: str, db: str) -> bool:
-    """Copy a SQL file into the container and execute it."""
+def psql_file(sql_path: str, container: str, superuser: str, db: str, schema: str = "public") -> bool:
+    """Copy a SQL file into the container and execute it inside the given schema."""
     filename = os.path.basename(sql_path)
     dest = f"/tmp/{filename}"
     cp = subprocess.run(
@@ -68,13 +68,14 @@ def psql_file(sql_path: str, container: str, superuser: str, db: str) -> bool:
         print(f"  ERROR copying DDL: {cp.stderr.strip()}", file=sys.stderr)
         return False
     result = subprocess.run(
-        ["docker", "exec", container, "psql", "-U", superuser, "-d", db, "-f", dest],
+        ["docker", "exec", container, "psql", "-U", superuser, "-d", db,
+         "-c", f"SET search_path TO {schema};", "-f", dest],
         capture_output=True, text=True,
     )
     if result.returncode != 0:
         print(f"  ERROR applying DDL: {result.stderr.strip()}", file=sys.stderr)
         return False
-    print(f"  OK: OMOP CDM schema applied")
+    print(f"  OK: OMOP CDM tables created in schema '{schema}'")
     return True
 
 
@@ -131,12 +132,13 @@ def main():
         psql(f"CREATE DATABASE {username} OWNER {username};", args.container, args.pg_user)
         psql(f"GRANT ALL PRIVILEGES ON DATABASE {username} TO {username};", args.container, args.pg_user)
 
-        # Apply OMOP CDM DDL as superuser, then hand ownership to the trainee
-        psql_file(ddl_path, args.container, args.pg_user, db=username)
+        # Create omop schema, apply DDL into it, hand ownership to the trainee
+        psql(f"CREATE SCHEMA omop AUTHORIZATION {username};", args.container, args.pg_user, db=username)
+        psql_file(ddl_path, args.container, args.pg_user, db=username, schema="omop")
         psql(
             f"DO $$ DECLARE r RECORD; BEGIN "
-            f"FOR r IN SELECT tablename FROM pg_tables WHERE schemaname='public' LOOP "
-            f"EXECUTE 'ALTER TABLE public.' || quote_ident(r.tablename) || ' OWNER TO {username}'; "
+            f"FOR r IN SELECT tablename FROM pg_tables WHERE schemaname='omop' LOOP "
+            f"EXECUTE 'ALTER TABLE omop.' || quote_ident(r.tablename) || ' OWNER TO {username}'; "
             f"END LOOP; END $$;",
             args.container, args.pg_user, db=username,
         )
