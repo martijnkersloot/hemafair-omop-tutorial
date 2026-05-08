@@ -51,7 +51,10 @@ def ensure_deps():
             needed.append(pkg)
     if needed:
         print(f"Installing missing packages: {', '.join(needed)}")
-        subprocess.run([sys.executable, "-m", "pip", "install"] + needed, check=True)
+        subprocess.run(
+            [sys.executable, "-m", "pip", "install", "--break-system-packages"] + needed,
+            check=True,
+        )
 
 
 def random_password(length: int = 16) -> str:
