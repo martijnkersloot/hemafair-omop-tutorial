@@ -216,12 +216,12 @@ def template_exists(container: str, superuser: str) -> bool:
 
 def build_template(container: str, superuser: str, password: str, port: int, ddl_path: str, vocab_dir: str, data_dir: str):
     print(f"\nBuilding template database '{TEMPLATE_DB}'...")
-    psql(f"DROP DATABASE IF EXISTS {TEMPLATE_DB};", container, superuser)
-    psql(f"CREATE DATABASE {TEMPLATE_DB};", container, superuser)
-    psql("CREATE SCHEMA omop;", container, superuser, db=TEMPLATE_DB)
-    psql("CREATE SCHEMA results;", container, superuser, db=TEMPLATE_DB)
-    psql_file(ddl_path, container, superuser, db=TEMPLATE_DB, schema="omop")
-    import_vocab(vocab_dir, superuser, password, db=TEMPLATE_DB, port=port)
+    #psql(f"DROP DATABASE IF EXISTS {TEMPLATE_DB};", container, superuser)
+    #psql(f"CREATE DATABASE {TEMPLATE_DB};", container, superuser)
+    #psql("CREATE SCHEMA omop;", container, superuser, db=TEMPLATE_DB)
+    #psql("CREATE SCHEMA results;", container, superuser, db=TEMPLATE_DB)
+    #psql_file(ddl_path, container, superuser, db=TEMPLATE_DB, schema="omop")
+    #import_vocab(vocab_dir, superuser, password, db=TEMPLATE_DB, port=port)
     import_registry_data(data_dir, superuser, password, db=TEMPLATE_DB, port=port)
 
 
