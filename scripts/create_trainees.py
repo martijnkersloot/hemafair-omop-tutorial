@@ -45,7 +45,8 @@ VOCAB_TABLES = [
 def ensure_deps():
     needed = []
     for pkg, name in [("gdown", "gdown"), ("psycopg2-binary", "psycopg2"),
-                      ("pandas", "pandas"), ("sqlalchemy", "sqlalchemy")]:
+                      ("pandas", "pandas"), ("sqlalchemy", "sqlalchemy"),
+                      ("openpyxl", "openpyxl")]:
         try:
             __import__(name)
         except ImportError:
@@ -176,7 +177,44 @@ def import_vocab(vocab_dir: str, superuser: str, password: str, db: str, port: i
     print("  Vocabulary import complete.")
 
 
-def build_template(container: str, superuser: str, password: str, port: int, ddl_path: str, vocab_dir: str):
+def import_registry_data(data_dir: str, superuser: str, password: str, db: str, port: int):
+    import pandas as pd
+    from sqlalchemy import create_engine
+    from urllib.parse import quote_plus
+
+    engine = create_engine(
+        f"postgresql+psycopg2://{superuser}:{quote_plus(password)}@localhost:{port}/{db}"
+    )
+    with engine.connect() as conn:
+        conn.execute(__import__("sqlalchemy").text("CREATE SCHEMA IF NOT EXISTS import"))
+        conn.commit()
+
+    files = [
+        ("dictionary", os.path.join(data_dir, "dictionary.csv"),  "csv",  {}),
+        ("mappings",   os.path.join(data_dir, "omop_mappings.xlsx"), "xlsx", {}),
+        ("labels",     os.path.join(data_dir, "patients.csv"),    "csv",
+         {"parse_dates": ["Patient's date of birth"]}),
+    ]
+    for table, filepath, fmt, kwargs in files:
+        if not os.path.exists(filepath):
+            print(f"  WARNING: {os.path.basename(filepath)} not found, skipping", file=sys.stderr)
+            continue
+        print(f"  Importing {os.path.basename(filepath)} → import.{table}...")
+        df = pd.read_excel(filepath, **kwargs) if fmt == "xlsx" else pd.read_csv(filepath, low_memory=False, **kwargs)
+        df.to_sql(table, engine, schema="import", if_exists="replace", index=False)
+    print("  Registry data import complete.")
+
+
+def template_exists(container: str, superuser: str) -> bool:
+    result = subprocess.run(
+        ["docker", "exec", container, "psql", "-U", superuser, "-d", "postgres",
+         "-tAc", f"SELECT 1 FROM pg_database WHERE datname='{TEMPLATE_DB}'"],
+        capture_output=True, text=True,
+    )
+    return result.stdout.strip() == "1"
+
+
+def build_template(container: str, superuser: str, password: str, port: int, ddl_path: str, vocab_dir: str, data_dir: str):
     print(f"\nBuilding template database '{TEMPLATE_DB}'...")
     psql(f"DROP DATABASE IF EXISTS {TEMPLATE_DB};", container, superuser)
     psql(f"CREATE DATABASE {TEMPLATE_DB};", container, superuser)
@@ -184,6 +222,7 @@ def build_template(container: str, superuser: str, password: str, port: int, ddl
     psql("CREATE SCHEMA results;", container, superuser, db=TEMPLATE_DB)
     psql_file(ddl_path, container, superuser, db=TEMPLATE_DB, schema="omop")
     import_vocab(vocab_dir, superuser, password, db=TEMPLATE_DB, port=port)
+    import_registry_data(data_dir, superuser, password, db=TEMPLATE_DB, port=port)
 
 
 def load_env(env_path: str) -> dict:
@@ -213,6 +252,8 @@ def main():
     parser.add_argument("--pg-password", default=env.get("POSTGRES_PASSWORD", ""), help="PostgreSQL superuser password")
     parser.add_argument("--pg-port", type=int, default=int(env.get("POSTGRES_PORT", 5432)), help="PostgreSQL port")
     parser.add_argument("--out", default="credentials.csv", help="Output CSV file")
+    parser.add_argument("--rebuild-template", action="store_true",
+                        help="Force rebuild of the template DB even if it already exists")
     args = parser.parse_args()
 
     if args.count < 1:
@@ -220,9 +261,15 @@ def main():
 
     print(f"Using superuser: {args.pg_user}")
 
-    ddl_path = fetch_omop_ddl()
-    vocab_dir = download_vocab()
-    build_template(args.container, args.pg_user, args.pg_password, args.pg_port, ddl_path, vocab_dir)
+    data_dir = os.path.normpath(os.path.join(os.path.dirname(__file__), "..", "data"))
+
+    if not args.rebuild_template and template_exists(args.container, args.pg_user):
+        print(f"\nTemplate database '{TEMPLATE_DB}' already exists — skipping build.")
+        print("  Run with --rebuild-template to force a full rebuild.")
+    else:
+        ddl_path = fetch_omop_ddl()
+        vocab_dir = download_vocab()
+        build_template(args.container, args.pg_user, args.pg_password, args.pg_port, ddl_path, vocab_dir, data_dir)
 
     rows = []
     for i in range(args.start, args.start + args.count):
