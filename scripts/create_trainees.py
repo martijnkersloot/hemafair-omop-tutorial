@@ -282,6 +282,8 @@ def main():
         psql(f"GRANT ALL PRIVILEGES ON DATABASE {username} TO {username};", args.container, args.pg_user)
         psql(f"ALTER SCHEMA omop OWNER TO {username};", args.container, args.pg_user, db=username)
         psql(f"ALTER SCHEMA results OWNER TO {username};", args.container, args.pg_user, db=username)
+        psql(f"GRANT USAGE ON SCHEMA import TO {username};", args.container, args.pg_user, db=username)
+        psql(f"GRANT SELECT ON ALL TABLES IN SCHEMA import TO {username};", args.container, args.pg_user, db=username)
         psql(
             f"DO $$ DECLARE r RECORD; BEGIN "
             f"FOR r IN SELECT tablename FROM pg_tables WHERE schemaname = 'omop' LOOP "
