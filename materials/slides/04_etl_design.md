@@ -142,8 +142,8 @@ The most common transform pattern:
 
 ```sql
 CASE source_column
-    WHEN 'Male'   THEN 8507   -- SNOMED: Male
-    WHEN 'Female' THEN 8532   -- SNOMED: Female
+    WHEN 'Male'   THEN 8507   -- ATHENA: Male (Gender vocabulary)
+    WHEN 'Female' THEN 8532   -- ATHENA: Female (Gender vocabulary)
     ELSE 0                    -- unknown or unmapped
 END AS gender_concept_id
 ```
