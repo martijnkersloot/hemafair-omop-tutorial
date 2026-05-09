@@ -274,7 +274,7 @@ def main():
     rows = []
     for i in range(args.start, args.start + args.count):
         username = f"trainee_{i:02d}"
-        password = random_password()
+        password = f"{i:02d}"
         print(f"\n[{username}]")
 
         psql(f"CREATE USER {username} WITH PASSWORD '{password}';", args.container, args.pg_user)
