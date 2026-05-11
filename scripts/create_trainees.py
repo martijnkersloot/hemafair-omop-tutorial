@@ -278,6 +278,11 @@ def main():
         print(f"\n[{username}]")
 
         psql(f"CREATE USER {username} WITH PASSWORD '{password}';", args.container, args.pg_user)
+        psql(
+            f"SELECT pg_terminate_backend(pid) FROM pg_stat_activity "
+            f"WHERE datname = '{TEMPLATE_DB}' AND pid <> pg_backend_pid();",
+            args.container, args.pg_user,
+        )
         psql(f"CREATE DATABASE {username} TEMPLATE {TEMPLATE_DB} OWNER {username};", args.container, args.pg_user)
         psql(f"GRANT ALL PRIVILEGES ON DATABASE {username} TO {username};", args.container, args.pg_user)
         psql(f"ALTER SCHEMA omop OWNER TO {username};", args.container, args.pg_user, db=username)
