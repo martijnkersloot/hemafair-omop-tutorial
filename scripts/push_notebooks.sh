@@ -22,6 +22,7 @@ NOTEBOOKS=(
     "hemafair_omop_etl_exercise.ipynb"
     "hemafair_omop_etl.ipynb"
     "hemafair_omop_reset.ipynb"
+    "hemafair_omop_queries.ipynb"
 )
 
 echo "Pushing notebooks from: $REPO_DIR"
