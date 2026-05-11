@@ -48,7 +48,7 @@ for user_home in /home/jupyter-*/; do
 
     chown -R "${jupyter_user}:${jupyter_user}" "$target_dir"
     echo "  ✓ $target_dir"
-    ((pushed++))
+    pushed=$((pushed + 1))
 done
 
 echo ""
