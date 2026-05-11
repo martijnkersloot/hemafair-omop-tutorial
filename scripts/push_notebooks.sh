@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Push notebooks to every JupyterHub user's omop_answers folder.
-# Run as root on the JupyterHub server.
+# Must be run as root (sudo) so it can write to home directories.
 #
 # Usage:
 #   sudo bash scripts/push_notebooks.sh
@@ -9,7 +9,14 @@
 set -euo pipefail
 
 REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-FOLDER="${1:-omop_answers}"
+FOLDER="omop_answers"
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --folder) FOLDER="$2"; shift 2 ;;
+        *) echo "Unknown argument: $1"; exit 1 ;;
+    esac
+done
 
 NOTEBOOKS=(
     "hemafair_omop_etl_exercise.ipynb"
@@ -18,15 +25,14 @@ NOTEBOOKS=(
 )
 
 echo "Pushing notebooks from: $REPO_DIR"
-echo "Target folder name:     $FOLDER"
+echo "Target folder:          ~/<user>/$FOLDER"
 echo ""
 
 pushed=0
-skipped=0
 
 for user_home in /home/jupyter-*/; do
     [[ -d "$user_home" ]] || continue
-    username=$(stat -c '%U' "$user_home" 2>/dev/null || basename "$user_home")
+    jupyter_user=$(basename "$user_home")
     target_dir="${user_home}${FOLDER}"
 
     mkdir -p "$target_dir"
@@ -40,7 +46,7 @@ for user_home in /home/jupyter-*/; do
         cp "$src" "$target_dir/$nb"
     done
 
-    chown -R "$username:$username" "$target_dir"
+    chown -R "${jupyter_user}:${jupyter_user}" "$target_dir"
     echo "  ✓ $target_dir"
     ((pushed++))
 done
